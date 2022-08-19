@@ -22,6 +22,7 @@ function receive(
     T <: AbstractMatrix && N == 1 && throw(ArgumentError("Measurement channel contains a matrix. Please specify num_ants to the number of used antennas with num_ants = NumAnts(N)"))
     T <: AbstractVector && N > 1 && throw(ArgumentError("Measurement channel contains a vector. In this case number of antennas should be one: num_ants = NumAnts(1) (default)"))
     
+    sampling_freq = uconvert(u"Hz", sampling_freq)
     data_channel = Channel{ReceiverDataOfInterest{N}}()
     gui_data_channel = Channel{GUIData}()
 
@@ -41,16 +42,18 @@ function receive(
                 acq_threshold,
                 time_in_lock_before_pvt
             )
-            sat_data = Dict(
+            sat_data = Dict{Int64, Vector{GNSSReceiver.SatelliteDataOfInterest{N}}}(
                 prn => map(x -> SatelliteDataOfInterest(get_cn0(x), get_prompt(x)), res)
                 for (prn, res) in track_results
             )
+            @info("Pushing to data channel!")
             push!(data_channel, ReceiverDataOfInterest(sat_data, receiver_state.pvt))
             if receiver_state.runtime % push_gui_data_every == 0ms
                 cn0s = Dict(
                     prn => get_cn0(last(res))
                     for (prn, res) in track_results
                 )
+                @info("Pushing to GUI channel!")
                 push!(gui_data_channel, GUIData(cn0s, receiver_state.pvt))
             end
         end
